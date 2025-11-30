@@ -21,12 +21,24 @@ class DatabaseHelperWeb implements IDatabase {
     };
   }
 
+  bool _isInitialized = false;
+
   Future<void> initialize() async {
+    // Don't reset tables! The constructor already initializes empty tables.
+    // This method should not call _initializeTables() as it would wipe existing data.
+    // Only initialize once - subsequent calls should be no-ops
+    if (!_isInitialized) {
+      // Only initialize if tables don't exist (shouldn't happen since constructor does it)
+      if (_tables.isEmpty || !_tables.containsKey('users')) {
+        _initializeTables();
+      }
+      _isInitialized = true;
+    }
+    
     // Try to load from localStorage if available
     if (const bool.fromEnvironment('dart.library.html')) {
-      // Web environment - could use localStorage here
-      // For now, just initialize empty tables
-      _initializeTables();
+      // Web environment - could use localStorage here in the future
+      // For now, tables are already initialized in constructor
     }
   }
 

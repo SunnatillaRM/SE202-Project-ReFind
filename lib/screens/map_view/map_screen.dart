@@ -8,7 +8,14 @@ import '/models/item.dart';
 import '/models/item_image.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final LatLng? initialLocation;
+  final int? highlightItemId;
+  
+  const MapScreen({
+    super.key,
+    this.initialLocation,
+    this.highlightItemId,
+  });
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -22,11 +29,31 @@ class _MapScreenState extends State<MapScreen> {
   double currentZoom = 14;
   final double minZoomToShowMarkers = 14;
   final LatLng userLocation = const LatLng(41.2995, 69.2401);
+  
+  LatLng get initialCameraLocation => widget.initialLocation ?? userLocation;
 
   @override
   void initState() {
     super.initState();
     _loadItems();
+    
+    // If initial location is provided, center map on it after loading
+    if (widget.initialLocation != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _centerMapOnLocation(widget.initialLocation!);
+      });
+    }
+  }
+  
+  void _centerMapOnLocation(LatLng location) {
+    mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: location,
+          zoom: 16.0, // Zoom in closer when showing specific item
+        ),
+      ),
+    );
   }
 
   Future<void> _loadItems() async {
@@ -36,9 +63,15 @@ class _MapScreenState extends State<MapScreen> {
     for (final item in items) {
       final String? imagePath = await _db.getFirstImageByItemId(item.itemId!);
 
+      // Highlight the item if it's the one we're navigating to
+      final bool isHighlighted = widget.highlightItemId != null && 
+                                  item.itemId == widget.highlightItemId;
+
       final BitmapDescriptor icon = imagePath != null
           ? await _createFramedMarker(imagePath)
-          : BitmapDescriptor.defaultMarker;
+          : (isHighlighted 
+              ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange)
+              : BitmapDescriptor.defaultMarker);
 
       temp.add(
         Marker(
@@ -162,10 +195,19 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("Lost Items Map")),
       body: GoogleMap(
-        initialCameraPosition: CameraPosition(target: userLocation, zoom: currentZoom),
+        initialCameraPosition: CameraPosition(
+          target: initialCameraLocation, 
+          zoom: widget.initialLocation != null ? 16.0 : currentZoom,
+        ),
         markers: visibleMarkers,
         onCameraMove: (pos) => setState(() => currentZoom = pos.zoom),
-        onMapCreated: (c) => mapController = c,
+        onMapCreated: (c) {
+          mapController = c;
+          // Center on initial location if provided
+          if (widget.initialLocation != null) {
+            _centerMapOnLocation(widget.initialLocation!);
+          }
+        },
       ),
     );
   }

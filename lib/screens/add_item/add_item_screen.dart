@@ -1,10 +1,15 @@
 import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import '/themes/app_colors.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '/screens/location_picker/location_picker_screen.dart';
+import '/database/database_service.dart';
+import '/models/item.dart';
+import '/models/item_image.dart';
+import '/models/category.dart';
 
 class AddItemScreen extends StatefulWidget {
   const AddItemScreen({super.key});
@@ -17,6 +22,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _referencePointController = TextEditingController();
+  final DatabaseService _dbService = DatabaseService();
 
   bool _isLost = true;
   int _bottomIndex = 1; // middle tab selected
@@ -24,9 +30,22 @@ class _AddItemScreenState extends State<AddItemScreen> {
   // image picker
   final ImagePicker _picker = ImagePicker();
   Uint8List? _imageBytes;
+  String? _imagePath; // Store the original image path if available
 
   // location from map
+  LatLng? _pickedLocation;
   String? _selectedLocation;
+
+  // category selection
+  List<Category> _categories = [];
+  Category? _selectedCategory;
+  bool _loadingCategories = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
 
   @override
   void dispose() {
@@ -36,15 +55,112 @@ class _AddItemScreenState extends State<AddItemScreen> {
     super.dispose();
   }
 
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await _dbService.getAllCategories();
+      setState(() {
+        _categories = categories;
+        _loadingCategories = false;
+        if (categories.isNotEmpty && _selectedCategory == null) {
+          _selectedCategory = categories.first;
+        }
+      });
+    } catch (e) {
+      print('Error loading categories: $e');
+      setState(() {
+        _loadingCategories = false;
+      });
+    }
+  }
+
   void _onBottomTap(int index) {
     setState(() => _bottomIndex = index);
     // later you can navigate to other tabs here
   }
 
-  void _post() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Post pressed (temporary action)')),
-    );
+  Future<void> _post() async {
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a title')),
+      );
+      return;
+    }
+
+    if (_pickedLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a location')),
+      );
+      return;
+    }
+
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a category')),
+      );
+      return;
+    }
+
+    try {
+      const int defaultUserId = 1;
+      final categoryId = _selectedCategory!.categoryId;
+
+      final item = Item(
+        userId: defaultUserId,
+        categoryId: categoryId,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty 
+            ? null 
+            : _descriptionController.text.trim(),
+        type: _isLost ? 'lost' : 'found',
+        latitude: _pickedLocation!.latitude,
+        longitude: _pickedLocation!.longitude,
+        addressText: _referencePointController.text.trim().isEmpty
+            ? null
+            : _referencePointController.text.trim(),
+      );
+
+      final itemId = await _dbService.insertItem(item);
+
+      if (_imageBytes != null && itemId != null) {
+        String imagePath;
+        if (_imagePath != null) {
+          imagePath = _imagePath!;
+        } else {
+          imagePath = 'assets/images/placeholder.png';
+        }
+
+        await _dbService.insertItemImage(
+          ItemImage(
+            itemId: itemId,
+            filePath: imagePath,
+          ),
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Item posted successfully!')),
+        );
+
+        _titleController.clear();
+        _descriptionController.clear();
+        _referencePointController.clear();
+        setState(() {
+          _imageBytes = null;
+          _imagePath = null;
+          _pickedLocation = null;
+          _selectedLocation = null;
+          _selectedCategory = _categories.isNotEmpty ? _categories.first : null;
+        });
+      }
+    } catch (e) {
+      print('Error posting item: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error posting item: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _pickImage() async {
@@ -54,6 +170,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       final bytes = await picked.readAsBytes();
       setState(() {
         _imageBytes = bytes;
+        _imagePath = picked.path;
       });
     }
   }
@@ -70,6 +187,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           '${pickedLocation.latitude.toStringAsFixed(6)}, ${pickedLocation.longitude.toStringAsFixed(6)}';
 
       setState(() {
+        _pickedLocation = pickedLocation;
         _selectedLocation = locationText;
         _referencePointController.text = locationText;
       });
@@ -224,17 +342,45 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // tags
-                    Wrap(
-                      spacing: 8,
-                      children: const [
-                        Chip(
-                          label: Text('All tags'),
-                          avatar: Icon(Icons.tag, size: 18),
-                        ),
-                        Chip(label: Text('Clothes')),
-                        Chip(label: Text('Documents')),
-                      ],
+                    // category selection
+                    const Text(
+                      'Category',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: _loadingCategories
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          : DropdownButton<Category>(
+                              value: _selectedCategory,
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              hint: const Text('Select a category'),
+                              items: _categories.map((Category category) {
+                                return DropdownMenuItem<Category>(
+                                  value: category,
+                                  child: Text(category.name),
+                                );
+                              }).toList(),
+                              onChanged: (Category? newValue) {
+                                setState(() {
+                                  _selectedCategory = newValue;
+                                });
+                              },
+                            ),
                     ),
                     const SizedBox(height: 16),
 
