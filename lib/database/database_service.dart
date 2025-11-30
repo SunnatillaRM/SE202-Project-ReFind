@@ -65,6 +65,17 @@ class SqfliteAdapter implements IDatabase {
 class DatabaseService {
   IDatabase? _db;
   bool _initialized = false;
+   static bool _forceWebMode = false;
+
+  /// For tests: force using the in-memory web database implementation.
+  static void forceWebMode() {
+    _forceWebMode = true;
+  }
+
+  /// For tests: reset any override so normal platform detection is used.
+  static void resetWebMode() {
+    _forceWebMode = false;
+  }
 
   Future<IDatabase> get _database async {
     if (_db != null && _initialized) return _db!;
