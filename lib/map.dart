@@ -63,6 +63,8 @@ Future<BitmapDescriptor> createFramedMarker(String imagePath) async {
 }
 
 class LostThingsMapPage extends StatefulWidget {
+  const LostThingsMapPage({super.key});
+
   @override
   _LostThingsMapPageState createState() => _LostThingsMapPageState();
 }
