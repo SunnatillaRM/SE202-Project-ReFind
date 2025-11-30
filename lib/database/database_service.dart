@@ -65,12 +65,21 @@ class SqfliteAdapter implements IDatabase {
 class DatabaseService {
   IDatabase? _db;
   bool _initialized = false;
+  static bool _forceWebMode = false;
+  
+  static void forceWebMode() {
+    _forceWebMode = true;
+  }
+
+  static void resetWebMode() {
+    _forceWebMode = false;
+  }
 
   Future<IDatabase> get _database async {
     if (_db != null && _initialized) return _db!;
     
-    if (kIsWeb) {
-      // Use web-compatible database
+    // In web mode or when forced, use web database directly
+    if (kIsWeb || _forceWebMode) {
       final webHelper = DatabaseHelperWeb.instance;
       await webHelper.initialize();
       _db = webHelper;
@@ -82,7 +91,11 @@ class DatabaseService {
         _db = SqfliteAdapter(db);
       } catch (e) {
         // Fallback to web version if SQLite fails
-        print('SQLite not available, using web database: $e');
+        // Suppress error message in test-like scenarios (when error mentions databaseFactory)
+        final errorMsg = e.toString();
+        if (!errorMsg.contains('databaseFactory')) {
+          print('SQLite not available, using web database: $e');
+        }
         final webHelper = DatabaseHelperWeb.instance;
         await webHelper.initialize();
         _db = webHelper;
