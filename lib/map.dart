@@ -4,21 +4,19 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 
 Future<BitmapDescriptor> createFramedMarker(String imagePath) async {
-  // Load image
   final ByteData data = await rootBundle.load(imagePath);
   final Uint8List bytes = data.buffer.asUint8List();
-  final ui.Codec codec = await ui.instantiateImageCodec(bytes, targetWidth: 150);
+  final ui.Codec codec =
+      await ui.instantiateImageCodec(bytes, targetWidth: 150);
   final ui.FrameInfo frameInfo = await codec.getNextFrame();
   final ui.Image originalImage = frameInfo.image;
 
-  // Create canvas
   final ui.PictureRecorder recorder = ui.PictureRecorder();
   final ui.Canvas canvas = ui.Canvas(recorder);
-  final double size = 180.0; // total marker size
-  final double borderWidth = 12.0; // thicker border
-  final double imageSize = size - 2 * borderWidth; // inner image size
+  final double size = 180.0;
+  final double borderWidth = 12.0;
+  final double imageSize = size - 2 * borderWidth;
 
-  // Draw border (white)
   final Paint borderPaint = Paint()
     ..color = Colors.blueGrey
     ..style = PaintingStyle.fill;
@@ -30,20 +28,16 @@ Future<BitmapDescriptor> createFramedMarker(String imagePath) async {
     borderPaint,
   );
 
-  // Calculate aspect ratio for the image
   final double imgAspect = originalImage.width / originalImage.height;
   double dstWidth, dstHeight;
   if (imgAspect > 1) {
-    // Wide image
     dstWidth = imageSize;
     dstHeight = imageSize / imgAspect;
   } else {
-    // Tall image
     dstHeight = imageSize;
     dstWidth = imageSize * imgAspect;
   }
 
-  // Center the image inside the border
   final double dx = (size - dstWidth) / 2;
   final double dy = (size - dstHeight) / 2;
 
@@ -51,14 +45,16 @@ Future<BitmapDescriptor> createFramedMarker(String imagePath) async {
   final Paint paint = Paint();
   canvas.drawImageRect(
     originalImage,
-    Rect.fromLTWH(0, 0, originalImage.width.toDouble(), originalImage.height.toDouble()),
+    Rect.fromLTWH(
+        0, 0, originalImage.width.toDouble(), originalImage.height.toDouble()),
     dstRect,
     paint,
   );
 
-  // Convert to BitmapDescriptor
-  final ui.Image finalImage = await recorder.endRecording().toImage(size.toInt(), size.toInt());
-  final ByteData? byteData = await finalImage.toByteData(format: ui.ImageByteFormat.png);
+  final ui.Image finalImage =
+      await recorder.endRecording().toImage(size.toInt(), size.toInt());
+  final ByteData? byteData =
+      await finalImage.toByteData(format: ui.ImageByteFormat.png);
   return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
 }
 
@@ -70,7 +66,7 @@ class LostThingsMapPage extends StatefulWidget {
 class _LostThingsMapPageState extends State<LostThingsMapPage> {
   GoogleMapController? mapController;
 
-  final LatLng userLocation = LatLng(41.2995, 69.2401); // Tashkent
+  final LatLng userLocation = LatLng(41.2995, 69.2401);
 
   final List<Map<String, dynamic>> items = [
     {
@@ -90,8 +86,8 @@ class _LostThingsMapPageState extends State<LostThingsMapPage> {
   ];
 
   Set<Marker> markers = {};
-  double currentZoom = 14; // initial zoom
-  final double minZoomToShowMarkers = 14; // threshold zoom
+  double currentZoom = 14;
+  final double minZoomToShowMarkers = 14;
 
   @override
   void initState() {
@@ -117,7 +113,6 @@ class _LostThingsMapPageState extends State<LostThingsMapPage> {
       );
     }
 
-    // Add user marker
     tempMarkers.add(
       Marker(
         markerId: MarkerId('user'),
@@ -141,7 +136,8 @@ class _LostThingsMapPageState extends State<LostThingsMapPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(item['title'], style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(item['title'],
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               SizedBox(height: 10),
               Image.asset(item['image'], width: 150),
               SizedBox(height: 10),
@@ -159,7 +155,6 @@ class _LostThingsMapPageState extends State<LostThingsMapPage> {
   }
 
   void onCameraMove(CameraPosition position) {
-    // Update current zoom
     if (position.zoom != currentZoom) {
       setState(() {
         currentZoom = position.zoom;
@@ -169,10 +164,9 @@ class _LostThingsMapPageState extends State<LostThingsMapPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Only show markers if zoom >= minZoomToShowMarkers
     Set<Marker> visibleMarkers = currentZoom >= minZoomToShowMarkers
         ? markers
-        : markers.where((m) => m.markerId.value == 'user').toSet(); // only show user marker if zoomed out
+        : markers.where((m) => m.markerId.value == 'user').toSet();
 
     return Scaffold(
       appBar: AppBar(title: Text("Lost Items Map")),
