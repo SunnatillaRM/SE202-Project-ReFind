@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/map.dart'; // make sure path is correct
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,6 +22,9 @@ class _Item {
   final String title;
   final String description;
   final String location;
+  final double lat;
+  final double lng;
+  final String imagePath; // 🔹 image for framed marker on map
 
   const _Item({
     required this.id,
@@ -28,6 +32,9 @@ class _Item {
     required this.title,
     required this.description,
     required this.location,
+    required this.lat,
+    required this.lng,
+    required this.imagePath,
   });
 }
 
@@ -44,63 +51,80 @@ class _HomePageState extends State<HomePage> {
     _Category(id: 'others', name: 'Others'),
   ];
 
-  // ITEMS (dummy data)
-  final List<_Item> _items = const [
-    // Electronics
-    _Item(
-      id: '1',
-      categoryId: 'electronics',
-      title: 'Wireless Headphones',
-      description: 'Noise-cancelling over-ear headphones, almost new.',
-      location: 'Amir Temur Avenue, Tashkent',
-    ),
-    _Item(
-      id: '2',
-      categoryId: 'electronics',
-      title: 'Smartphone (Samsung A52)',
-      description: 'Found near bus stop, black case with cracked corner.',
-      location: 'Chilonzor 3, Tashkent',
-    ),
-    // Clothes
-    _Item(
-      id: '3',
-      categoryId: 'clothes',
-      title: 'Black Hoodie',
-      description: 'Plain black hoodie, size M.',
-      location: 'Magic City Park',
-    ),
-    _Item(
-      id: '4',
-      categoryId: 'clothes',
-      title: 'Blue Backpack',
-      description: 'School backpack with keychain on zipper.',
-      location: 'Minor metro station',
-    ),
-    // Books
-    _Item(
-      id: '5',
-      categoryId: 'books',
-      title: 'Data Structures Book',
-      description: 'English CS textbook left in reading room.',
-      location: 'NUU Library, 2nd floor',
-    ),
-    // Furniture
-    _Item(
-      id: '6',
-      categoryId: 'furniture',
-      title: 'Office Chair',
-      description: 'Ergonomic chair, slightly damaged armrest.',
-      location: 'Yunusabad office center',
-    ),
-    // Others
-    _Item(
-      id: '7',
-      categoryId: 'others',
-      title: 'Keychain with 3 Keys',
-      description: 'Metal keychain with smiley face.',
-      location: 'Next to coffee shop on campus',
-    ),
-  ];
+  // ITEMS (with coordinates around Tashkent + imagePath)
+  // ⚠️ Make sure these assets exist in pubspec.yaml (wallet.png, keys.png, etc.)
+ final List<_Item> _items = const [
+  _Item(
+    id: '1',
+    categoryId: 'electronics',
+    title: 'Wireless Headphones',
+    description: 'Noise-cancelling over-ear headphones, almost new.',
+    location: 'Amir Temur Avenue, Tashkent',
+    lat: 41.311081,
+    lng: 69.240562,
+    imagePath: 'assets/images/headphone.jpg',
+  ),
+  _Item(
+    id: '2',
+    categoryId: 'electronics',
+    title: 'Smartphone (Samsung A52)',
+    description: 'Found near bus stop, black case with cracked corner.',
+    location: 'Chilonzor 3, Tashkent',
+    lat: 41.315081,
+    lng: 69.245562,
+    imagePath: 'assets/images/samsung.jpg',
+  ),
+  _Item(
+    id: '3',
+    categoryId: 'clothes',
+    title: 'Black Hoodie',
+    description: 'Plain black hoodie, size M.',
+    location: 'Magic City Park',
+    lat: 41.320000,
+    lng: 69.250000,
+    imagePath: 'assets/images/hoodie.jpg',
+  ),
+  _Item(
+    id: '4',
+    categoryId: 'clothes',
+    title: 'Blue Backpack',
+    description: 'School backpack with keychain on zipper.',
+    location: 'Minor metro station',
+    lat: 41.305000,
+    lng: 69.230000,
+    imagePath: 'assets/images/backpack.jpg',
+  ),
+  _Item(
+    id: '5',
+    categoryId: 'books',
+    title: 'Data Structures Book',
+    description: 'English CS textbook left in reading room.',
+    location: 'NUU Library, 2nd floor',
+    lat: 41.310500,
+    lng: 69.247000,
+    imagePath: 'assets/images/book.jpg',
+  ),
+  _Item(
+    id: '6',
+    categoryId: 'furniture',
+    title: 'Office Chair',
+    description: 'Ergonomic chair, slightly damaged armrest.',
+    location: 'Yunusabad office center',
+    lat: 41.298000,
+    lng: 69.240000,
+    imagePath: 'assets/images/chair.jpg',
+  ),
+  _Item(
+    id: '7',
+    categoryId: 'others',
+    title: 'Keychain with 3 Keys',
+    description: 'Metal keychain with smiley face.',
+    location: 'Next to coffee shop on campus',
+    lat: 41.299500,
+    lng: 69.241500,
+    imagePath: 'assets/images/keys.jpg',
+  ),
+];
 
   late String _selectedCategoryId;
 
@@ -247,6 +271,21 @@ class _HomePageState extends State<HomePage> {
                                     description: item.description,
                                     location: item.location,
                                     color: cardColor,
+                                    onTap: () {
+                                      // 👉 One-tap: open map focused on this item's location
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => LostThingsMapPage(
+                                            targetLat: item.lat,
+                                            targetLng: item.lng,
+                                            targetTitle: item.title,
+                                            targetDescription: item.description,
+                                            targetImagePath: item.imagePath,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
                               )
@@ -280,6 +319,7 @@ class _HomePageState extends State<HomePage> {
           }
 
           if (index == 2) {
+            // Map icon opens normal map (no specific item)
             Navigator.pushNamed(context, '/map');
           }
         },
@@ -388,89 +428,94 @@ class _ItemCard extends StatelessWidget {
   final String description;
   final String location;
   final Color color;
+  final VoidCallback? onTap;
 
   const _ItemCard({
     required this.title,
     required this.description,
     required this.location,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Photo placeholder
-          Container(
-            height: 180,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(4),
+    return InkWell(
+      onTap: onTap, // 👈 one tap = open map
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Photo placeholder
+            Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Title
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-
-                // Location
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 16,
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        location,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                  ),
+                  const SizedBox(height: 4),
+
+                  // Location
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
 
-                const SizedBox(height: 4),
+                  const SizedBox(height: 4),
 
-                // Description
-                Text(
-                  description,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
+                  // Description
+                  Text(
+                    description,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
