@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'screens/map_view/map_screen.dart';
-import 'screens/home/home_screen.dart';
+import 'app.dart';
 
 void main() async {
-  runApp(
-    MaterialApp(
-      home: HomePage(),
-    ),
-  );
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // No database calls — mock data only.
+  runApp(const MyApp());
 }

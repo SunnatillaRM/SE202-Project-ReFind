@@ -1,180 +1,171 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
+import 'dart:ui' as ui;
 
-Future<BitmapDescriptor> createFramedMarker(String imagePath) async {
-  final ByteData data = await rootBundle.load(imagePath);
-  final Uint8List bytes = data.buffer.asUint8List();
-  final ui.Codec codec = await ui.instantiateImageCodec(bytes, targetWidth: 150);
-  final ui.FrameInfo frameInfo = await codec.getNextFrame();
-  final ui.Image originalImage = frameInfo.image;
+import '/database/database_service.dart';
+import '/models/item.dart';
+import '/models/item_image.dart';
 
-  final ui.PictureRecorder recorder = ui.PictureRecorder();
-  final ui.Canvas canvas = ui.Canvas(recorder);
-  final double size = 180.0;
-  final double borderWidth = 12.0;
-  final double imageSize = size - 2 * borderWidth;
+class MapScreen extends StatefulWidget {
+  const MapScreen({super.key});
 
-  final Paint borderPaint = Paint()
-    ..color = Colors.blueGrey
-    ..style = PaintingStyle.fill;
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, size, size),
-      Radius.circular(24),
-    ),
-    borderPaint,
-  );
-
-  final double imgAspect = originalImage.width / originalImage.height;
-  double dstWidth, dstHeight;
-  if (imgAspect > 1) {
-    dstWidth = imageSize;
-    dstHeight = imageSize / imgAspect;
-  } else {
-    dstHeight = imageSize;
-    dstWidth = imageSize * imgAspect;
-  }
-
-  final double dx = (size - dstWidth) / 2;
-  final double dy = (size - dstHeight) / 2;
-
-  final Rect dstRect = Rect.fromLTWH(dx, dy, dstWidth, dstHeight);
-  final Paint paint = Paint();
-  canvas.drawImageRect(
-    originalImage,
-    Rect.fromLTWH(0, 0, originalImage.width.toDouble(), originalImage.height.toDouble()),
-    dstRect,
-    paint,
-  );
-
-  final ui.Image finalImage = await recorder.endRecording().toImage(size.toInt(), size.toInt());
-  final ByteData? byteData = await finalImage.toByteData(format: ui.ImageByteFormat.png);
-  return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
-}
-
-class LostThingsMapPage extends StatefulWidget {
   @override
-  _LostThingsMapPageState createState() => _LostThingsMapPageState();
+  State<MapScreen> createState() => _MapScreenState();
 }
 
-class _LostThingsMapPageState extends State<LostThingsMapPage> {
+class _MapScreenState extends State<MapScreen> {
   GoogleMapController? mapController;
-
-  final LatLng userLocation = LatLng(41.2995, 69.2401);
-
-  final List<Map<String, dynamic>> items = [
-    {
-      "title": "Wallet",
-      "description": "Black leather wallet found near the bus stop.",
-      "lat": 41.311081,
-      "lng": 69.240562,
-      "image": "assets/images/wallet.png"
-    },
-    {
-      "title": "Keys",
-      "description": "Set of car keys found in the park.",
-      "lat": 41.315081,
-      "lng": 69.245562,
-      "image": "assets/images/keys.png"
-    }
-  ];
+  final DatabaseService _db = DatabaseService();
 
   Set<Marker> markers = {};
   double currentZoom = 14;
   final double minZoomToShowMarkers = 14;
+  final LatLng userLocation = const LatLng(41.2995, 69.2401);
 
   @override
   void initState() {
     super.initState();
-    loadMarkers();
+    _loadItems();
   }
 
-  void loadMarkers() async {
-    Set<Marker> tempMarkers = {};
-    for (var item in items) {
-      final customIcon = await createFramedMarker(item['image']);
-      tempMarkers.add(
+  Future<void> _loadItems() async {
+    final List<Item> items = await _db.getActiveItems();
+    Set<Marker> temp = {};
+
+    for (final item in items) {
+      final String? imagePath = await _db.getFirstImageByItemId(item.itemId!);
+
+      final BitmapDescriptor icon = imagePath != null
+          ? await _createFramedMarker(imagePath)
+          : BitmapDescriptor.defaultMarker;
+
+      temp.add(
         Marker(
-          markerId: MarkerId(item['title']),
-          position: LatLng(item['lat'], item['lng']),
-          icon: customIcon,
+          markerId: MarkerId(item.itemId.toString()),
+          position: LatLng(item.latitude, item.longitude),
+          icon: icon,
           infoWindow: InfoWindow(
-            title: item['title'],
-            snippet: item['description'],
-            onTap: () => showItemDetails(item),
+            title: item.title,
+            snippet: item.description ?? '',
+            onTap: () => _showItemDetails(item, imagePath),
           ),
         ),
       );
     }
 
-    tempMarkers.add(
+    // Add user marker
+    temp.add(
       Marker(
-        markerId: MarkerId('user'),
+        markerId: const MarkerId('user'),
         position: userLocation,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        infoWindow: InfoWindow(title: "You are here"),
+        infoWindow: const InfoWindow(title: "You are here"),
       ),
     );
 
-    setState(() {
-      markers = tempMarkers;
-    });
+    setState(() => markers = temp);
   }
 
-  void showItemDetails(item) {
+  // ---------------------------------------------------------------------
+  //   CUSTOM MARKER IMAGE FRAME
+  // ---------------------------------------------------------------------
+  Future<BitmapDescriptor> _createFramedMarker(String imagePath) async {
+    final ByteData data = await rootBundle.load(imagePath);
+    final Uint8List bytes = data.buffer.asUint8List();
+    final ui.Codec codec = await ui.instantiateImageCodec(bytes, targetWidth: 150);
+    final ui.FrameInfo frameInfo = await codec.getNextFrame();
+    final ui.Image originalImage = frameInfo.image;
+
+    final ui.PictureRecorder recorder = ui.PictureRecorder();
+    final ui.Canvas canvas = ui.Canvas(recorder);
+    const double size = 180.0;
+    const double borderWidth = 12.0;
+    const double imageSize = size - 2 * borderWidth;
+
+    final Paint borderPaint = Paint()
+      ..color = Colors.blueGrey
+      ..style = PaintingStyle.fill;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size, size),
+        const Radius.circular(24),
+      ),
+      borderPaint,
+    );
+
+    // aspect ratio
+    final double ratio = originalImage.width / originalImage.height;
+    double w, h;
+    if (ratio > 1) {
+      w = imageSize;
+      h = imageSize / ratio;
+    } else {
+      h = imageSize;
+      w = imageSize * ratio;
+    }
+
+    final double dx = (size - w) / 2;
+    final double dy = (size - h) / 2;
+
+    canvas.drawImageRect(
+      originalImage,
+      Rect.fromLTWH(0, 0, originalImage.width.toDouble(), originalImage.height.toDouble()),
+      Rect.fromLTWH(dx, dy, w, h),
+      Paint(),
+    );
+
+    final ui.Image finalImage = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final ByteData? pngBytes = await finalImage.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(pngBytes!.buffer.asUint8List());
+  }
+
+  // ---------------------------------------------------------------------
+  //   SHOW ITEM DETAILS BOTTOM SHEET
+  // ---------------------------------------------------------------------
+  void _showItemDetails(Item item, String? imagePath) {
     showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(item['title'], style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              SizedBox(height: 10),
-              Image.asset(item['image'], width: 150),
-              SizedBox(height: 10),
-              Text(item['description']),
-              SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text("Close"),
-              )
-            ],
-          ),
-        );
-      },
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(item.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (imagePath != null)
+              Image.asset(imagePath, width: 160)
+            else
+              const Icon(Icons.image_not_supported, size: 80),
+            const SizedBox(height: 12),
+            Text(item.description ?? "No description."),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Close"),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  void onCameraMove(CameraPosition position) {
-    if (position.zoom != currentZoom) {
-      setState(() {
-        currentZoom = position.zoom;
-      });
-    }
-  }
+  // ---------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    Set<Marker> visibleMarkers = currentZoom >= minZoomToShowMarkers
+    final visibleMarkers = currentZoom >= minZoomToShowMarkers
         ? markers
         : markers.where((m) => m.markerId.value == 'user').toSet();
 
     return Scaffold(
-      appBar: AppBar(title: Text("Lost Items Map")),
+      appBar: AppBar(title: const Text("Lost Items Map")),
       body: GoogleMap(
-        initialCameraPosition: CameraPosition(
-          target: userLocation,
-          zoom: currentZoom,
-        ),
+        initialCameraPosition: CameraPosition(target: userLocation, zoom: currentZoom),
         markers: visibleMarkers,
-        onCameraMove: onCameraMove,
-        onMapCreated: (controller) {
-          mapController = controller;
-        },
+        onCameraMove: (pos) => setState(() => currentZoom = pos.zoom),
+        onMapCreated: (c) => mapController = c,
       ),
     );
   }

@@ -1,261 +1,191 @@
 import 'package:flutter/material.dart';
-import 'package:se202_project_refind/models/item.dart';
-import 'package:se202_project_refind/widgets/item_card.dart';
-import 'package:se202_project_refind/widgets/search_bar.dart';
-import 'package:se202_project_refind/widgets/map.dart';
-import 'package:se202_project_refind/widgets/navbar.dart';
+import '/widgets/search_bar.dart';
+import '/widgets/item_card.dart';
+import '/models/item.dart';
+import '/models/category.dart';
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _Category {
-  final String id;
-  final String name;
-  const _Category({required this.id, required this.name});
-}
+class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _search = TextEditingController();
 
-class _HomePageState extends State<HomePage> {
-  static const headerColor = Color(0xFFF1D9D9);
-  static const cardColor = Color(0xFF9B4B4B);
+  late List<Category> categories;
+  late List<Item> items;
+  List<Item> filtered = [];
 
-  final List<_Category> _categories = const [
-    _Category(id: 'electronics', name: 'Electronics'),
-    _Category(id: 'clothes', name: 'Clothes'),
-    _Category(id: 'books', name: 'Books'),
-    _Category(id: 'furniture', name: 'Furniture'),
-    _Category(id: 'others', name: 'Others'),
-  ];
-
-  final List<Item> _items = [
-    Item(
-      itemId: 1,
-      title: 'Wireless Headphones',
-      description: 'Noise-cancelling over-ear headphones.',
-      type: 'lost',
-      latitude: 41.311081,
-      longitude: 69.240562,
-      addressText: 'Amir Temur Avenue, Tashkent',
-      createdAt: 0,
-      updatedAt: 0,
-      tags: ['electronics'],
-      imagePaths: ['assets/images/headphone.jpg'],
-      categoryId: null,
-    ),
-    Item(
-      itemId: 2,
-      title: 'Samsung A52 Smartphone',
-      description: 'Found near bus stop, cracked case.',
-      type: 'found',
-      latitude: 41.315081,
-      longitude: 69.245562,
-      addressText: 'Chilonzor 3, Tashkent',
-      createdAt: 0,
-      updatedAt: 0,
-      tags: ['electronics'],
-      imagePaths: ['assets/images/samsung.jpg'],
-      categoryId: null,
-    ),
-    Item(
-      itemId: 3,
-      title: 'Black Hoodie (M)',
-      description: 'Plain black hoodie.',
-      type: 'lost',
-      latitude: 41.320000,
-      longitude: 69.250000,
-      addressText: 'Magic City Park',
-      createdAt: 0,
-      updatedAt: 0,
-      tags: ['clothes'],
-      imagePaths: ['assets/images/hoodie.jpg'],
-      categoryId: null,
-    ),
-  ];
-
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = "";
-
-  late String _selectedCategoryId;
+  int? selectedCategoryId;
 
   @override
   void initState() {
     super.initState();
-    _selectedCategoryId = _categories.first.id;
 
-    _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text.toLowerCase().trim();
-      });
-    });
+    loadMockData();
+    _search.addListener(applyFilters);
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  void loadMockData() {
+    // ---------- MOCK CATEGORIES ----------
+    categories = [
+      Category(categoryId: 1, name: "Wallet", iconPath: "assets/images/wallet.png"),
+      Category(categoryId: 2, name: "Keys", iconPath: "assets/images/keys.png"),
+      Category(categoryId: 3, name: "Phone", iconPath: null),
+      Category(categoryId: 4, name: "Bag", iconPath: null),
+    ];
+
+    // ---------- MOCK ITEMS ----------
+    items = [
+      Item(
+        itemId: 1,
+        userId: 1,
+        categoryId: 1,
+        title: "Black Leather Wallet",
+        description: "Found near bus stop.",
+        type: "found",
+        latitude: 41.31,
+        longitude: 69.24,
+        addressText: "Bus stop",
+      ),
+      Item(
+        itemId: 2,
+        userId: 1,
+        categoryId: 2,
+        title: "Car Keys",
+        description: "Found in central park.",
+        type: "found",
+        latitude: 41.315,
+        longitude: 69.245,
+        addressText: "Central Park",
+      ),
+    ];
+
+    // default selected category
+    selectedCategoryId = categories.first.categoryId;
+
+    applyFilters();
+  }
+
+  void applyFilters() {
+    final query = _search.text.trim().toLowerCase();
+
+    filtered = items.where((item) {
+      final categoryMatch = item.categoryId == selectedCategoryId;
+
+      final textMatch = query.isEmpty ||
+          item.title.toLowerCase().contains(query) ||
+          (item.description ?? "").toLowerCase().contains(query);
+
+      return categoryMatch && textMatch;
+    }).toList();
+
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<Item> filteredItems = _items
-        .where((i) => i.tags.contains(_selectedCategoryId))
-        .where((i) {
-          if (_searchQuery.isEmpty) return true;
-          return i.title.toLowerCase().contains(_searchQuery) ||
-              i.description.toLowerCase().contains(_searchQuery) ||
-              (i.addressText?.toLowerCase().contains(_searchQuery) ?? false);
-        }).toList();
-
-    return Scaffold(
-      backgroundColor: Colors.grey.shade200,
-
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SearchBarWidget(controller: _searchController),
-                    const SizedBox(height: 16),
-
-                    const Text(
-                      'Category',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-
-                    _buildCategoryScroller(),
-
-                    const SizedBox(height: 24),
-
-                    Text(
-                      'Items (${_categories.firstWhere((c) => c.id == _selectedCategoryId).name})',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-
-                    if (filteredItems.isEmpty)
-                      const Text(
-                        'No items yet in this category.',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      )
-                    else
-                      Column(
-                        children: filteredItems.map((item) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: ItemCard(
-                              item: item,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => LostThingsMapPage(
-                                      targetLat: item.latitude,
-                                      targetLng: item.longitude,
-                                      targetTitle: item.title,
-                                      targetDescription: item.description,
-                                      targetImagePath: item.imagePaths.first,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      bottomNavigationBar: AppNavbar(
-        currentIndex: 0,
-        onTap: (i) {
-          if (i == 0) return; // Already on Home
-
-          if (i == 1) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Add Item coming soon')));
-          }
-
-          if (i == 2) {
-            Navigator.pushNamed(context, '/map');
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      color: headerColor,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+    return SafeArea(
+      child: Column(
         children: [
+          // Top bar
           Container(
-            width: 28,
-            height: 28,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.blueAccent,
-            ),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryScroller() {
-    return SizedBox(
-      height: 110,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
-          final c = _categories[index];
-          final selected = c.id == _selectedCategoryId;
-
-          return GestureDetector(
-            onTap: () => setState(() => _selectedCategoryId = c.id),
-            child: Column(
+            padding: const EdgeInsets.all(16),
+            color: const Color(0xFFF1D9D9),
+            child: const Row(
               children: [
-                Container(
-                  width: 80,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(4),
-                    border: selected
-                        ? Border.all(color: Colors.white, width: 3)
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  c.name,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
+                CircleAvatar(radius: 14, backgroundColor: Colors.blueAccent),
+                Spacer(),
               ],
             ),
-          );
-        },
+          ),
+
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SearchBarWidget(controller: _search),
+                  const SizedBox(height: 20),
+
+                  const Text("Category",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+
+                  SizedBox(
+                    height: 110,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: categories.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, i) {
+                        final c = categories[i];
+                        final selected = c.categoryId == selectedCategoryId;
+
+                        return GestureDetector(
+                          onTap: () {
+                            selectedCategoryId = c.categoryId;
+                            applyFilters();
+                          },
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 70,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF9B4B4B),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: selected
+                                      ? Border.all(color: Colors.white, width: 3)
+                                      : null,
+                                ),
+                                child: c.iconPath != null
+                                    ? Image.asset(c.iconPath!, fit: BoxFit.cover)
+                                    : const Icon(Icons.category, color: Colors.white),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                c.name,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: selected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+                  const Text("Items",
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+
+                  if (filtered.isEmpty)
+                    const Text("No items found",
+                        style: TextStyle(color: Colors.grey))
+                  else
+                    Column(
+                      children: filtered
+                          .map((item) => Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: ItemCard(item: item),
+                              ))
+                          .toList(),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
