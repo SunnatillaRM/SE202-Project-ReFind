@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -28,6 +30,12 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        val localProps = Properties()
+        localProps.load(rootProject.file("local.properties").inputStream())
+        val mapsApiKey: String = localProps.getProperty("MAPS_API_KEY") ?: ""
+
+        manifestPlaceholders.put("GOOGLE_MAPS_API_KEY", mapsApiKey)
     }
 
     buildTypes {
