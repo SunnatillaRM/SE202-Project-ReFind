@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
-import 'map.dart';
+import 'app.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    MaterialApp(
-      title: 'ReFind - Lost & Found',
-      home: LostThingsMapPage(),
-      debugShowCheckedModeBanner: false,
-    ),
-  );
+
+  // No database calls — mock data only.
+  runApp(const MyApp());
 }
