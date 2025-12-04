@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '/models/item.dart';
 import '/database/database_service.dart';
+import '/screens/map_view/map_screen.dart';
 
 class ItemCard extends StatefulWidget {
   final Item item;
@@ -30,7 +32,17 @@ class _ItemCardState extends State<ItemCard> {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () {
-        // TODO: open item details OR map
+        // Navigate to map with item's coordinates
+        final itemLocation = LatLng(widget.item.latitude, widget.item.longitude);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MapScreen(
+              initialLocation: itemLocation,
+              highlightItemId: widget.item.itemId,
+            ),
+          ),
+        );
       },
       child: Container(
         decoration: BoxDecoration(

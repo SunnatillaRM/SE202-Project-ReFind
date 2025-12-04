@@ -17,3 +17,4 @@ abstract class IDatabase {
   Future<int> delete(String table, {String? where, List<dynamic>? whereArgs});
   Future<void> close();
 }
+

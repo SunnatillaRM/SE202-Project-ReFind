@@ -3,6 +3,7 @@ import '/widgets/search_bar.dart';
 import '/widgets/item_card.dart';
 import '/models/item.dart';
 import '/models/category.dart';
+import '/database/database_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,76 +14,78 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _search = TextEditingController();
+  final DatabaseService _dbService = DatabaseService();
 
-  late List<Category> categories;
-  late List<Item> items;
+  List<Category> categories = [];
   List<Item> filtered = [];
+  bool isLoading = true;
 
-  int? selectedCategoryId;
+  int? selectedCategoryId; // null means "All categories"
 
   @override
   void initState() {
     super.initState();
-
-    loadMockData();
-    _search.addListener(applyFilters);
+    _search.addListener(_onSearchChanged);
+    _loadData();
   }
 
-  void loadMockData() {
-    // ---------- MOCK CATEGORIES ----------
-    categories = [
-      Category(categoryId: 1, name: "Wallet", iconPath: "assets/images/wallet.png"),
-      Category(categoryId: 2, name: "Keys", iconPath: "assets/images/keys.png"),
-      Category(categoryId: 3, name: "Phone", iconPath: null),
-      Category(categoryId: 4, name: "Bag", iconPath: null),
-    ];
-
-    // ---------- MOCK ITEMS ----------
-    items = [
-      Item(
-        itemId: 1,
-        userId: 1,
-        categoryId: 1,
-        title: "Black Leather Wallet",
-        description: "Found near bus stop.",
-        type: "found",
-        latitude: 41.31,
-        longitude: 69.24,
-        addressText: "Bus stop",
-      ),
-      Item(
-        itemId: 2,
-        userId: 1,
-        categoryId: 2,
-        title: "Car Keys",
-        description: "Found in central park.",
-        type: "found",
-        latitude: 41.315,
-        longitude: 69.245,
-        addressText: "Central Park",
-      ),
-    ];
-
-    // default selected category
-    selectedCategoryId = categories.first.categoryId;
-
-    applyFilters();
+  @override
+  void dispose() {
+    _search.removeListener(_onSearchChanged);
+    _search.dispose();
+    super.dispose();
   }
 
-  void applyFilters() {
-    final query = _search.text.trim().toLowerCase();
+  Future<void> _loadData() async {
+    try {
+      print('HomeScreen: Loading categories...');
+      final loadedCategories = await _dbService.getAllCategories();
+      print('HomeScreen: Loaded ${loadedCategories.length} categories');
+      
+      setState(() {
+        categories = loadedCategories;
+        // Don't auto-select a category - let user see all items by default
+        // selectedCategoryId remains null to show all items
+        isLoading = false;
+      });
+      
+      await _applyFilters();
+    } catch (e) {
+      print('Error loading data: $e');
+      print('Stack trace: ${StackTrace.current}');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
 
-    filtered = items.where((item) {
-      final categoryMatch = item.categoryId == selectedCategoryId;
+  void _onSearchChanged() {
+    _applyFilters();
+  }
 
-      final textMatch = query.isEmpty ||
-          item.title.toLowerCase().contains(query) ||
-          (item.description ?? "").toLowerCase().contains(query);
+  Future<void> _applyFilters() async {
+    try {
+      final query = _search.text.trim();
+      print('HomeScreen: Applying filters - query: "$query", categoryId: $selectedCategoryId');
+      
+      final results = await _dbService.searchItems(
+        query: query.isEmpty ? null : query,
+        categoryId: selectedCategoryId,
+        status: 'active',
+      );
+      
+      print('HomeScreen: Found ${results.length} items');
 
-      return categoryMatch && textMatch;
-    }).toList();
-
-    setState(() {});
+      setState(() {
+        filtered = results;
+      });
+    } catch (e) {
+      print('Error applying filters: $e');
+      print('Stack trace: ${StackTrace.current}');
+      setState(() {
+        filtered = [];
+      });
+    }
   }
 
   @override
@@ -103,87 +106,131 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SearchBarWidget(controller: _search),
-                  const SizedBox(height: 20),
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SearchBarWidget(controller: _search),
+                        const SizedBox(height: 20),
 
-                  const Text("Category",
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
+                        const Text("Category",
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
 
-                  SizedBox(
-                    height: 110,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: categories.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, i) {
-                        final c = categories[i];
-                        final selected = c.categoryId == selectedCategoryId;
+                        SizedBox(
+                          height: 110,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: categories.length + 1, // +1 for "All" option
+                            separatorBuilder: (_, __) => const SizedBox(width: 12),
+                            itemBuilder: (context, i) {
+                              // First item is "All"
+                              if (i == 0) {
+                                final selected = selectedCategoryId == null;
+                                return GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      selectedCategoryId = null;
+                                    });
+                                    _applyFilters();
+                                  },
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        width: 80,
+                                        height: 70,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF9B4B4B),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: selected
+                                              ? Border.all(color: Colors.white, width: 3)
+                                              : null,
+                                        ),
+                                        child: const Icon(Icons.all_inclusive, color: Colors.white),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'All',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: selected
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              
+                              // Other items are categories
+                              final c = categories[i - 1];
+                              final selected = c.categoryId == selectedCategoryId;
 
-                        return GestureDetector(
-                          onTap: () {
-                            selectedCategoryId = c.categoryId;
-                            applyFilters();
-                          },
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 80,
-                                height: 70,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF9B4B4B),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: selected
-                                      ? Border.all(color: Colors.white, width: 3)
-                                      : null,
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    selectedCategoryId = c.categoryId;
+                                  });
+                                  _applyFilters();
+                                },
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 80,
+                                      height: 70,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF9B4B4B),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: selected
+                                            ? Border.all(color: Colors.white, width: 3)
+                                            : null,
+                                      ),
+                                      child: c.iconPath != null
+                                          ? Image.asset(c.iconPath!, fit: BoxFit.cover)
+                                          : const Icon(Icons.category, color: Colors.white),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      c.name,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: selected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                child: c.iconPath != null
-                                    ? Image.asset(c.iconPath!, fit: BoxFit.cover)
-                                    : const Icon(Icons.category, color: Colors.white),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                c.name,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: selected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                            ],
+                              );
+                            },
                           ),
-                        );
-                      },
+                        ),
+
+                        const SizedBox(height: 24),
+                        const Text("Items",
+                            style:
+                                TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+
+                        if (filtered.isEmpty)
+                          const Text("No items found",
+                              style: TextStyle(color: Colors.grey))
+                        else
+                          Column(
+                            children: filtered
+                                .map((item) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 16),
+                                      child: ItemCard(item: item),
+                                    ))
+                                .toList(),
+                          ),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 24),
-                  const Text("Items",
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-
-                  if (filtered.isEmpty)
-                    const Text("No items found",
-                        style: TextStyle(color: Colors.grey))
-                  else
-                    Column(
-                      children: filtered
-                          .map((item) => Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: ItemCard(item: item),
-                              ))
-                          .toList(),
-                    ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 class Item {
   final int? itemId;
   final int userId;
@@ -14,8 +12,6 @@ class Item {
   final int? createdAt;
   final int? updatedAt;
 
-  final List<String> tags;
-
   Item({
     this.itemId,
     required this.userId,
@@ -29,7 +25,6 @@ class Item {
     this.addressText,
     this.createdAt,
     this.updatedAt,
-    this.tags = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -47,8 +42,6 @@ class Item {
       'address_text': addressText,
       'created_at': createdAt ?? now,
       'updated_at': updatedAt ?? now,
-
-      'tags': jsonEncode(tags),
     };
   }
 
@@ -66,10 +59,7 @@ class Item {
       addressText: map['address_text'] as String?,
       createdAt: map['created_at'] as int?,
       updatedAt: map['updated_at'] as int?,
-
-      tags: map['tags'] == null
-          ? []
-          : List<String>.from(jsonDecode(map['tags'])),
     );
   }
 }
+

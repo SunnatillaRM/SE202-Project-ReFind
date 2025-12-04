@@ -2,11 +2,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'database_helper.dart';
 import 'database_helper_web.dart';
 import 'database_interface.dart';
-import '/models/user.dart';
-import '/models/category.dart';
-import '/models/item.dart';
-import '/models/item_image.dart';
-import '/models/claim.dart';
+import '../models/user.dart';
+import '../models/category.dart';
+import '../models/item.dart';
+import '../models/item_image.dart';
+import '../models/claim.dart';
 
 // Adapter for sqflite Database
 class SqfliteAdapter implements IDatabase {
@@ -65,14 +65,12 @@ class SqfliteAdapter implements IDatabase {
 class DatabaseService {
   IDatabase? _db;
   bool _initialized = false;
-   static bool _forceWebMode = false;
-
-  /// For tests: force using the in-memory web database implementation.
+  static bool _forceWebMode = false;
+  
   static void forceWebMode() {
     _forceWebMode = true;
   }
 
-  /// For tests: reset any override so normal platform detection is used.
   static void resetWebMode() {
     _forceWebMode = false;
   }
@@ -80,8 +78,8 @@ class DatabaseService {
   Future<IDatabase> get _database async {
     if (_db != null && _initialized) return _db!;
     
-    if (kIsWeb) {
-      // Use web-compatible database
+    // In web mode or when forced, use web database directly
+    if (kIsWeb || _forceWebMode) {
       final webHelper = DatabaseHelperWeb.instance;
       await webHelper.initialize();
       _db = webHelper;
@@ -93,7 +91,11 @@ class DatabaseService {
         _db = SqfliteAdapter(db);
       } catch (e) {
         // Fallback to web version if SQLite fails
-        print('SQLite not available, using web database: $e');
+        // Suppress error message in test-like scenarios (when error mentions databaseFactory)
+        final errorMsg = e.toString();
+        if (!errorMsg.contains('databaseFactory')) {
+          print('SQLite not available, using web database: $e');
+        }
         final webHelper = DatabaseHelperWeb.instance;
         await webHelper.initialize();
         _db = webHelper;
@@ -510,3 +512,4 @@ class DatabaseService {
     };
   }
 }
+
